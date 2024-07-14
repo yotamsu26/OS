@@ -18,6 +18,11 @@ word_t  getNewDistance(word_t frame, word_t pageFrame){
     return (num1 > num2) ? num2: num1;
 }
 
+void expand(uint64_t frame) {
+    for(uint64_t i = 0; i<PAGE_SIZE;i++) {
+        PMwrite(frame*PAGE_SIZE+i, 0);
+    }
+}
 
 typedef struct FreeFrame{
     word_t emptyTableFrame;
@@ -53,7 +58,7 @@ typedef struct FreeFrame{
         return false;
     }
 
-    word_t evictFrame() const{
+    word_t evictFrame(bool needToExpand) const{
         word_t addr1 = 0;
         uint64_t pageTableFrame = 0;
 
@@ -65,6 +70,10 @@ typedef struct FreeFrame{
         }
 
         PMevict(addr1, this->evictedFrame);
+        if(needToExpand){
+            expand(addr1);
+        }
+
         PMwrite(pageTableFrame, 0);
 
         return addr1;
@@ -72,19 +81,26 @@ typedef struct FreeFrame{
 
 } FreeFrame;
 
-word_t frameReturnFunc(FreeFrame* newFrame){
+word_t frameReturnFunc(FreeFrame* newFrame, word_t depth){
+
+    bool needToExpand = (depth != TABLES_DEPTH-1);
+
     if(newFrame->emptyTableFrame != 0){
         return newFrame->emptyTableFrame;
     }
 
     if(newFrame->unusedFrame + 1 < NUM_FRAMES){
+        if(needToExpand){
+            expand(newFrame->unusedFrame + 1);
+        }
         return newFrame->unusedFrame + 1;
     }
 
-    return newFrame->evictFrame();
+    return newFrame->evictFrame(needToExpand);
 }
 
-void traverseTree(word_t baseFrame, word_t currRoute, word_t pageFrame, FreeFrame* newFrame, word_t depth){
+void traverseTree(word_t baseFrame, word_t currRoute, word_t pageFrame,
+                  FreeFrame* newFrame, word_t depth, bool isOriginFrame){
 
     newFrame->updateMaxUnusedFrame(baseFrame);
 
@@ -102,24 +118,26 @@ void traverseTree(word_t baseFrame, word_t currRoute, word_t pageFrame, FreeFram
         PMread(frameToRead, &checkNextFrame);
 
         if(checkNextFrame != 0){
-            traverseTree(checkNextFrame, updatedRoute, pageFrame, newFrame, depth+1);
+            traverseTree(checkNextFrame, updatedRoute, pageFrame, newFrame, depth+1, false);
             if(newFrame->disconnectFrame(checkNextFrame, frameToRead)){
                 return;
             }
         }
     }
 
-    newFrame->emptyTableFrame = baseFrame;
+    if(isOriginFrame){
+        newFrame->emptyTableFrame = baseFrame;
+    }
 }
 
-word_t getAddrForFrame(word_t pagePath, word_t depth){
+word_t getAddrForFrame(word_t pagePath, word_t depth, bool isOriginFrame){
     auto* newFrame = new FreeFrame();
     word_t startingFrame = 0;
     word_t startingRoute = 0;
 
-    traverseTree(startingFrame, startingRoute, pagePath, newFrame, depth);
+    traverseTree(startingFrame, startingRoute, pagePath, newFrame, depth, isOriginFrame);
 
-    return frameReturnFunc(newFrame);
+    return frameReturnFunc(newFrame, depth);
 }
 
 void readLeaf(uint64_t addr1, uint64_t virtualAddress, word_t* value){
@@ -168,8 +186,8 @@ int VMread(uint64_t virtualAddress, word_t* value){
         PMread(pageTableFrame, &addr1);
 
         if(addr1 == 0){
-            addr1 = getAddrForFrame(virtualAddressWithoutOffset, d);
-            
+            addr1 = getAddrForFrame(virtualAddressWithoutOffset, d, true);
+
             PMwrite(pageTableFrame, addr1);
             needToRestore = true;
         }
@@ -207,8 +225,8 @@ int VMwrite(uint64_t virtualAddress, word_t value){
         PMread(pageTableFrame, &addr1);
 
         if(addr1 == 0){
-            addr1 = getAddrForFrame(virtualAddressWithoutOffset, d);
-            
+            addr1 = getAddrForFrame(virtualAddressWithoutOffset, d, true);
+
             PMwrite(pageTableFrame, addr1);
             needToRestore = true;
         }
