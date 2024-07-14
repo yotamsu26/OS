@@ -1,4 +1,3 @@
-#include <cmath>
 #include "PhysicalMemory.h"
 
 uint64_t getOffSet(int depth, uint64_t virtualAddress){
@@ -153,6 +152,9 @@ void VMinitialize(){
  * address for any reason)
  */
 int VMread(uint64_t virtualAddress, word_t* value){
+    if(virtualAddress > VIRTUAL_ADDRESS_WIDTH){
+        return 0;
+    }
 
     word_t addr1 = 0;
     word_t pageTableFrame = 0;
@@ -178,6 +180,7 @@ int VMread(uint64_t virtualAddress, word_t* value){
     }
 
     readLeaf(addr1, virtualAddress, value);
+    return 1;
 }
 
 
@@ -188,6 +191,9 @@ int VMread(uint64_t virtualAddress, word_t* value){
  * address for any reason)
  */
 int VMwrite(uint64_t virtualAddress, word_t value){
+    if(virtualAddress > VIRTUAL_ADDRESS_WIDTH){
+        return 0;
+    }
 
     word_t addr1 = 0;
     uint64_t pageTableFrame = 0;
@@ -213,4 +219,5 @@ int VMwrite(uint64_t virtualAddress, word_t value){
     }
 
     writeLeaf(addr1, virtualAddress, value);
+    return 1;
 }
