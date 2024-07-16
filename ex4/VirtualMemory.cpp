@@ -29,6 +29,61 @@ void eraseFrame(uint64_t frameInd) {
     }
 }
 
+typedef struct SearchFrame{
+
+    word_t wantedPage;
+    word_t* maxFrame;
+    word_t * maxDistPageIndex;
+    word_t freeFrame;
+
+    SearchFrame(word_t * maxFrame,word_t * maxDistPageIndex, word_t wantedPage):
+    wantedPage(wantedPage),
+    maxFrame(maxFrame),
+    maxDistPageIndex(maxDistPageIndex),
+    freeFrame(0){
+
+    }
+
+    void setFreeFrame(word_t frame){
+        this->freeFrame = frame;
+    }
+
+    static word_t evictFrame(uint64_t pageInd, bool isFinalLevel){
+        word_t retAddr = 0;
+        uint64_t frame = 0;
+        uint64_t offset = 0;
+        for (word_t i = 0; i < TABLES_DEPTH; i++) {
+            frame = retAddr * PAGE_SIZE;
+            offset = getOffSet(i, pageInd << OFFSET_WIDTH);
+            PMread(frame + offset, &retAddr);
+        }
+        PMevict(retAddr, pageInd);
+        if (!isFinalLevel) {
+            eraseFrame(retAddr);
+        }
+        PMwrite(frame + offset, 0);
+        return retAddr;
+    }
+
+    word_t returnFrame(bool isFinalLevel) const{
+        if (this->freeFrame != 0) {
+            return this->freeFrame;
+        } else if (*this->maxFrame < NUM_FRAMES - 1) {
+            if (!isFinalLevel) {
+                eraseFrame(*this->maxFrame + 1);
+            }
+            return *this->maxFrame + 1;
+        }
+        return SearchFrame::evictFrame(*this->maxDistPageIndex, isFinalLevel);
+    }
+
+    void updateMaxFrame(word_t frame){
+        if (*maxFrame < frame) {
+            *maxFrame = frame;
+        }
+    }
+};
+
 word_t pageDist(word_t firstPage, word_t secondPage) {
     word_t dist1 = firstPage - secondPage < 0 ? secondPage - firstPage : firstPage - secondPage;
     word_t dist2 = NUM_PAGES - dist1;
@@ -44,73 +99,52 @@ void findMaxDistance(word_t currPage, word_t& maxPage, word_t wantedPage) {
     }
 }
 
-word_t treeTraversal(word_t baseFrame, word_t route, word_t depth, word_t& maxFrame,
-                     word_t& maxDistPage, word_t wantedPage, word_t prevFrame) {
-    if (maxFrame < baseFrame) {
-        maxFrame = baseFrame;
-    }
+void treeTraversal(word_t baseFrame, word_t route, word_t depth, SearchFrame* searchFrame, word_t prevFrame) {
+
     if (depth == TABLES_DEPTH) {
-        findMaxDistance(route, maxDistPage, wantedPage);
-        return 0;
+        findMaxDistance(route, *searchFrame->maxDistPageIndex, searchFrame->wantedPage);
+        return;
     }
+
     bool routeExists = false;
     word_t i = 0;
-    while (i < PAGE_SIZE) {
+    while (true) {
         word_t nextFrame = 0;
         auto frameToRead = baseFrame * PAGE_SIZE + i;
 
         PMread(frameToRead, &nextFrame);
         if (nextFrame != 0) {
-            word_t foundFrame = treeTraversal(nextFrame, (route << OFFSET_WIDTH) + i,
-                                              depth + 1, maxFrame, maxDistPage,
-                                              wantedPage, prevFrame);
-            if (foundFrame != 0) {
-                if (nextFrame == foundFrame) {
+            searchFrame->updateMaxFrame(nextFrame);
+
+            treeTraversal(nextFrame, (route << OFFSET_WIDTH) + i,depth + 1,
+                                              searchFrame, prevFrame);
+
+            if (searchFrame->freeFrame != 0) {
+                if (nextFrame == searchFrame->freeFrame) {
                     PMwrite(baseFrame * PAGE_SIZE + i, 0); // disconnect curr from next
                 }
-                return foundFrame;
+                return;
             }
             routeExists = true;
         }
-        i++;
+        if(++i >= PAGE_SIZE){
+            break;
+        }
     }
     if (!routeExists && (baseFrame != prevFrame)) {
-        return baseFrame;
+         searchFrame->setFreeFrame(baseFrame);
+         return;
     }
-    return 0;
-}
-
-word_t evict(uint64_t pageInd, bool isFinalLevel) {
-    word_t retAddr = 0;
-    uint64_t frame = 0;
-    uint64_t offset = 0;
-    for (word_t i = 0; i < TABLES_DEPTH; i++) {
-        frame = retAddr * PAGE_SIZE;
-        offset = getOffSet(i, pageInd << OFFSET_WIDTH);
-        PMread(frame + offset, &retAddr);
-    }
-    PMevict(retAddr, pageInd);
-    if (!isFinalLevel) {
-        eraseFrame(retAddr);
-    }
-    PMwrite(frame + offset, 0);
-    return retAddr;
 }
 
 word_t findFreeAddr(word_t queriedPageIndex, word_t originFrame, bool isFinalLevel) {
-    word_t maxFrameIndex = 0;
+    word_t maxFrame = 0;
     word_t maxDistPageIndex = queriedPageIndex;
-    word_t freeFrameIndex = treeTraversal(0, 0, 0,
-                                          maxFrameIndex, maxDistPageIndex, queriedPageIndex, originFrame);
-    if (freeFrameIndex != 0) {
-        return freeFrameIndex;
-    } else if (maxFrameIndex < NUM_FRAMES - 1) {
-        if (!isFinalLevel) {
-            eraseFrame(maxFrameIndex + 1);
-        }
-        return maxFrameIndex + 1;
-    }
-    return evict(maxDistPageIndex, isFinalLevel);
+
+    auto* searchFrame = new SearchFrame(&maxFrame, &maxDistPageIndex, queriedPageIndex);
+    treeTraversal(0, 0, 0, searchFrame, originFrame);
+
+    return searchFrame->returnFrame(isFinalLevel);
 }
 
 void readLeaf(uint64_t addr1, uint64_t virtualAddress, word_t *value) {
@@ -186,7 +220,7 @@ int VMwrite(uint64_t virtualAddress, word_t value) {
         return 0;
     }
     word_t addr1 = 0;
-    word_t prevFrame = 0;
+    word_t prevFrame;
     bool needToRestore = false;
     for (int d = 0; d < TABLES_DEPTH; d++) {
         uint64_t offset = getOffSet(d, virtualAddress);
