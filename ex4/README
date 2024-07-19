@@ -1,1 +1,10 @@
+yotamsu26, dvir.sasson
+Yotam Suliman 206922205, Dvir Sasson 318642857
+EX4
 
+FILES:
+VirtualMemory.cpp - the virtual memory implementation.
+Makefile - make file for creating the library.
+README - details.
+
+REMARKS:
