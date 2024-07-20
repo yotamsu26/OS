@@ -1,5 +1,9 @@
 #include "PhysicalMemory.h"
 
+#define SUCCESS 1;
+#define FAILURE 0;
+#define LEAF_DEPTH (TABLES_DEPTH-1)
+
 
 int calcInitialWidth() {
     if (VIRTUAL_ADDRESS_WIDTH % OFFSET_WIDTH == 0) {
@@ -17,15 +21,17 @@ uint64_t getOffSet(uint64_t i, uint64_t virutalAddress) {
 }
 
 uint64_t getPhysicalAddress(uint64_t pageInd) {
-    uint64_t frame = 0;
-    uint64_t offset = 0;
     word_t retAddr = 0;
-    for (word_t i = 0; i < TABLES_DEPTH; i++) {
-        frame = retAddr * PAGE_SIZE;
-        offset = getOffSet(i, pageInd << OFFSET_WIDTH);
-        PMread(frame + offset, &retAddr);
+    for (word_t depth = 0; depth < TABLES_DEPTH; depth++) {
+        uint64_t tempAddr = retAddr * PAGE_SIZE + getOffSet(depth, pageInd << OFFSET_WIDTH);
+
+        if(depth == LEAF_DEPTH){
+            return (tempAddr);
+        }
+        PMread(tempAddr, &retAddr);
     }
-    return (frame + offset);
+
+    return 0;
 }
 
 void eraseFrame(uint64_t frameInd) {
@@ -197,7 +203,7 @@ void traverseAndAllocate(uint64_t virtualAddress, word_t &addr1) {
         PMread(pageTableFrame, &addr1);
 
         if (addr1 == 0) {
-            if(depth != TABLES_DEPTH - 1){
+            if(depth != LEAF_DEPTH){
                 addr1 = word_t(findFreeAddr(word_t(virtualAddress >> OFFSET_WIDTH),
                                             previousFrame, false));
                 PMwrite(pageTableFrame, addr1);
@@ -216,9 +222,6 @@ void traverseAndAllocate(uint64_t virtualAddress, word_t &addr1) {
 
 }
 
-/*
- * Initialize the virtual memory.
- */
 void VMinitialize() {
     for (int i = 0; i < PAGE_SIZE; i++) {
         PMwrite(i, 0);
@@ -227,7 +230,7 @@ void VMinitialize() {
 
 int VMread(uint64_t virtualAddress, word_t *value) {
     if (virtualAddress >= VIRTUAL_MEMORY_SIZE) {
-        return 0;
+        return FAILURE;
     }
 
     word_t addr1 = 0;
@@ -235,12 +238,12 @@ int VMread(uint64_t virtualAddress, word_t *value) {
     traverseAndAllocate(virtualAddress, addr1);
 
     readLeaf(addr1, virtualAddress, value);
-    return 1;
+    return SUCCESS;
 }
 
 int VMwrite(uint64_t virtualAddress, word_t value) {
     if (virtualAddress >= VIRTUAL_MEMORY_SIZE) {
-        return 0;
+        return FAILURE;
     }
 
     word_t addr1 = 0;
@@ -248,5 +251,5 @@ int VMwrite(uint64_t virtualAddress, word_t value) {
     traverseAndAllocate(virtualAddress, addr1);
 
     writeLeaf(addr1, virtualAddress, value);
-    return 1;
+    return SUCCESS;
 }
