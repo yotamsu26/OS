@@ -1,0 +1,12 @@
+Assignment 1:
+
+dup(2) - duplicates the file with the according descriptor.
+fcntl - provides the control over the open file.
+brk - used to change the space allocated for the calling proccess.
+fstat - obtain information about an open file associated with the file descriptor fildes, and shall write it to the area pointed to by buf.
+write -  enables message sending over the system in real time.
+close - deallocate the file descriptor indicated by fildes.
+exit_group - exit all threads in a process.
+
+to summariaze it seems like the program does sume basic file operations.
+for example to write in to the file and change the allocated space for the program.

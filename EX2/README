@@ -1,0 +1,59 @@
+yotamsu26,
+Yotam Suliman 206922205,
+EX2
+
+FILES:
+uthreads.cpp - the uthreads library implementation.
+Thread.h - the Thread class header file.
+Makefile - make file for creating the library.
+README - detalis and answers to the theoratical questions.
+
+REMARKS:
+
+ANSWERS:
+
+Q1 :
+sigsetjmp - a call for this function saves the calling enviorment in its env arg.
+(the method sign = int sigsetjmp(sigjmp_buf env, int savemask);)
+If the value of the savemask argument is not 0, sigsetjmp() will also save the current signal mask of the calling thread as part of the calling environment.
+
+siglongjmp - a call for this function restores the enviorment saved by the most recent invocation of sigsetjmp.
+(the method sign = void siglongjmp(sigjmp_buf env, int val);)
+The siglongjmp() function will restore the saved signal mask if and only if the env argument was initialised by a call to sigsetjmp() with a non-zero savemask argument.
+
+Q2 :
+one general use of user-level threads is a web server that is waiting for a response from a client.
+In the time the server is waiting for the user response, he can do other staff that will make less latency in other processes.
+
+Q3 :
+the advantages and disadvantages of creating the new process instead of creating a kernel-level
+thread are :
+
+Advantages :
+
+1. The process is isolated from the other processes, so if something happens to one process it should not effect others.
+2. Thread switching does not require kernel mode privileges.
+3. Scheduling is application specific.
+4. The kernel is not aware of the existence of threads
+
+Disadvantages :
+
+1. Inter-process communication (IPC) is provided by the OS, through specific system calls but at a very high overhead
+2. Inter-process communication Creates many synchronization problems
+3. System calls (including I/O) by threads block the process
+4. A single thread can monopolize the time-slice thus starving the
+   other threads within the task
+
+Q4 :
+The kill command in the shell triggers a system call to send a signal to the process with the specified pid. This system call (kill(pid, SIGTERM)) is an interrupt that causing the CPU to switch from user mode to kernel mode to handle the request.
+The os handles the system calls and sending signals to the processes.
+kill PID sends the TERM signal to the specified process, giving it a chance to shut down in an orderly manner, for example clean up resources it's using.
+The app recives the signal from the kernel and handling it.
+
+Q5 :
+the difference between 'real time' and 'virtual time' is that Virtual time is a concept used in computer simulation, distributed systems, and virtual reality to model and manage the flow of time differently from real-world or wall-clock time. It allows systems to simulate events, processes, or actions in a controlled time frame, which can be faster, slower, paused, or even reversed relative to real time.
+Real time is the actual time during which a process or event occurs, or the actual time taken by a process to complete. It is the time that is measured by a clock or a timer and is used to determine the actual time taken by a process or event to complete.
+
+one use of virtual time can be change of the frame time that we want to mesure. because the virtual time does not have to be in real time mesure we can change the time fram as we wish.
+
+one use of real time can be mesure the real time of a process or an opreation that need the reallity time, like getting the date and the hour.
